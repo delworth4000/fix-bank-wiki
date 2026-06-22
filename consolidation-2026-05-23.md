@@ -46,14 +46,14 @@ Rationale:
 
 ### Structural issue: stale files in folder
 
-The following files are superseded versions left over from earlier in today's session. They cannot be deleted via the Drive connector — please remove them manually:
+The following files were superseded versions left over from earlier in that session, awaiting manual removal from the Drive connector (which could not delete files). [Drive file IDs redacted — this was a Google Drive-era artefact; the wiki now lives in Git, where stale duplicates cannot occur.]
 
-- `index.md` — id: `1Cy6OQx6eAkkpEBvTgqE-D7XuwsiaHptP` (2817 bytes, created 10:01)
-- `log.md` — id: `1zSStG1mbbkCr-o5cmiqRNfDfKo_jp9bw` (756 bytes, created 10:01)
-- `03-node-config-and-infrastructure.md` — id: `1w-tzlacRzFriZuxNFw8BPd70Gf0ce60q` (9823 bytes, created 10:05)
-- `test` — id: `1O4fUuvbrsKVOWZqylwLRZYcuUbajE3lm` (4 bytes)
+- `index.md` (2817 bytes, created 10:01)
+- `log.md` (756 bytes, created 10:01)
+- `03-node-config-and-infrastructure.md` (9823 bytes, created 10:05)
+- `test` (4 bytes)
 
-The current canonical versions are the larger/later files with the same names.
+The canonical versions were the larger/later files with the same names.
 
 ---
 
