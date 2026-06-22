@@ -1,10 +1,10 @@
 # 03 — n8n Node Configuration & Infrastructure
 
-_Webhook registration and response modes, retry-on-fail, execution timeouts, credential rebinding on node type swap, updateNode parameter wipe, display name drift, dead feature flags, native n8n node vs hand-built HTTP, IF/Switch metadata gaps, SDK retry timing drop, plan-tier execution timeout cap._
+_Webhook registration and response modes, retry-on-fail, execution timeouts, credential rebinding on node type swap, updateNode parameter wipe, display name drift, dead feature flags, plan-tier execution timeout cap, Sheets tab selection, Code-node action routing, binary accessor version-sensitivity. (SDK / MCP build-path tooling moved to category 11.)_
 
 **Entry count:** 12
-**Last updated:** May 2026
-**Related categories:** 01-data-flow-and-wiring, 02-expressions-and-encoding
+**Last updated:** June 2026
+**Related categories:** 01-data-flow-and-wiring, 02-expressions-and-encoding, 11-n8n-sdk-mcp-tooling
 
 ---
 
@@ -65,7 +65,7 @@ _Webhook registration and response modes, retry-on-fail, execution timeouts, cre
 **Platform:** n8n
 **Node types / context:** Every external-API node — googleDocs, googleSheets, gmail, httpRequest, chainLlm and friends.
 **Fix:** Set retryOnFail: true, maxTries: 3, waitBetweenTries: 3000-5000ms on every external-API node. For slow calls (CF with 30-60s response time), use maxTries: 2 with waitBetweenTries: 10000ms.
-**Spec rule:** Every external-API node must have retry-on-fail configured. The spec must specify maxTries and waitBetweenTries per node category, calibrated to expected call duration. Default-no-retry is a spec-time error. See also #050 — SDK create drops retry timing fields silently; post-create verification is required.
+**Spec rule:** Every external-API node must have retry-on-fail configured. The spec must specify maxTries and waitBetweenTries per node category, calibrated to expected call duration. Default-no-retry is a spec-time error. See also #050 (cat 11) — SDK create drops retry timing fields silently; post-create verification is required.
 **First seen:** May 2026, n8n
 **Related:** #050
 **Last updated:** May 2026
@@ -115,7 +115,7 @@ _Webhook registration and response modes, retry-on-fail, execution timeouts, cre
 **Fix:** Before deploying a node type swap, survey existing credential bindings on other nodes of the target type using the workflow JSON. Find an applicable credential ID. Include it in updates.credentials alongside the type change.
 **Spec rule:** Workflow specs that require migrating a node from one Google service to another must list the credential rebinding as an explicit deployment step, not assume it carries over from the prior node configuration.
 **First seen:** May 2026, n8n
-**Related:** none
+**Related:** #066
 **Last updated:** May 2026
 
 ## History
@@ -138,60 +138,6 @@ _Webhook registration and response modes, retry-on-fail, execution timeouts, cre
 
 ---
 
-## #048 — Reading the instance's own executions: use the native n8n node, not a hand-built HTTP call
-
-**Symptom:** A workflow that needs to read its own n8n instance's executions (e.g. a sweeper, error handler, or audit flow) reaches for $helpers.httpRequest to /api/v1/executions with an inline API key in a Code node. This fails with an auth or connection error on instances where credentials are managed externally.
-**Cause:** Treating the instance's own public API as an arbitrary external HTTP target, when n8n ships a first-class node for it (n8n-nodes-base.n8n) with its own credential type (n8nApi).
-**Platform:** n8n
-**Node types / context:** Any workflow reading instance executions or workflow state from within n8n; sweepers, error handlers, audit flows.
-**Fix:** Use the native n8n node (n8n-nodes-base.n8n, resource: execution, operations Get Many / Get) with an n8nApi credential. List the n8nApi credential as a deployment prerequisite. Important caveat: the native n8n node has a documented limitation on SSL — it may fail with a connection error on HTTPS Cloud instances. If this occurs, fall back to an HTTP Request node calling the same /api/v1/executions endpoint with the same API key credential. Test the native node first; if it errors on SSL, switch the node type, not the credential.
-**Spec rule:** When a workflow must read its own instance's executions or workflows, the spec must specify the native n8n node + n8nApi credential, list the credential as a deployment prerequisite, and note the SSL fallback to HTTP Request. Do not spec a hand-built HTTP call with an inline API key.
-**First seen:** May 2026, n8n (timeout-sweeper + error-handler build)
-**Related:** #018, #028
-**Last updated:** May 2026
-
-## History
-
-(none — new entry)
-
----
-
-## #049 — IF v2.2 / Switch v3.2 require conditions.options.version 2; SDK validator does not enforce it; instance save rejects it
-
-**Symptom:** An IF node (typeVersion 2.2+) or Switch node (typeVersion 3.2+) passes validate_workflow in the SDK with no errors, but saving or updating it on the live instance is rejected with "Missing required field conditions.options.version. Expected value: 2". The workflow is not saved.
-**Cause:** The filter-node conditions.options block requires version: 2 on the n8n instance, alongside caseSensitive, leftValue, and typeValidation. The SDK pre-deploy validator does not check for this field, so the gap only surfaces at instance save time.
-**Platform:** n8n
-**Node types / context:** IF v2.2+, Switch v3.2+ nodes built or edited via the SDK / code path (not via the UI editor, which injects the field automatically).
-**Fix:** Always include conditions.options.version: 2 when constructing filter nodes via code. The full required conditions.options block is: { "version": 2, "caseSensitive": true, "leftValue": "", "typeValidation": "strict" }. If a save is rejected for this reason, add the missing field via patchNodeField and re-save.
-**Spec rule:** Specs that include IF v2.2+/Switch v3.2+ nodes must specify the full conditions.options block including version: 2. Do not rely on SDK validation alone to catch filter-node metadata gaps — the validator does not enforce it.
-**First seen:** May 2026, n8n (error-handler build — E3 save rejection)
-**Related:** none
-**Last updated:** May 2026
-
-## History
-
-(none — new entry)
-
----
-
-## #050 — Retry timings (maxTries/waitBetweenTries) dropped silently on SDK workflow create
-
-**Symptom:** Nodes configured with retryOnFail: true, maxTries: 3, waitBetweenTries: 3000 via the SDK create_workflow_from_code are created with retryOnFail: true but without the explicit timing fields. maxTries and waitBetweenTries are absent from the created node, leaving n8n to apply its defaults (3 tries / 1000ms wait). The create call does not error. The discrepancy is only visible on a post-create re-pull.
-**Cause:** The SDK create path does not carry retry timing fields through to the created node. Only the retryOnFail boolean survives; the accompanying timing values are silently dropped.
-**Platform:** n8n
-**Node types / context:** Any node with custom retry configuration created via the SDK code path (create_workflow_from_code or equivalent).
-**Fix:** After SDK-based workflow creation, re-pull the created workflow and verify retry fields on all nodes that require specific timings. Restore maxTries and waitBetweenTries via n8n_update_partial_workflow (updateNode) for each affected node.
-**Spec rule:** Where a spec mandates specific retry timings (#020 family), the build checklist must include a post-create verification and patch step for retry fields. The SDK create call alone does not guarantee custom retry timings are persisted.
-**First seen:** May 2026, n8n (timeout-sweeper build — retry timings dropped on initial create)
-**Related:** #020
-**Last updated:** May 2026
-
-## History
-
-(none — new entry)
-
----
-
 ## #051 — Workflow-level executionTimeout is silently capped by the n8n plan tier
 
 **Symptom:** A workflow is configured with settings.executionTimeout: 600 (or higher). Executions are consistently cancelled at exactly 300 seconds regardless of the workflow setting. The executionTimeout value is saved correctly in the workflow. The 300-second cut-off is clean and repeatable, not a transient error.
@@ -210,12 +156,67 @@ _Webhook registration and response modes, retry-on-fail, execution timeouts, cre
 
 ---
 
+## #055 — n8n Google Sheets tab selection: use mode "name", not a "gid=" value
+
+**Symptom:** A Google Sheets node fails with "Sheet with ID gid=NNN not found" even though the gid is correct and the service account has access. Other Sheets nodes in the same workflow that select the tab by name work fine.
+**Cause:** The `sheetName` resourceLocator was set with `mode: "list"` and a `value` of `"gid=NNN"`. n8n does not resolve a `gid=`-prefixed value here; the prefixed string is the bug, independent of access or the gid being valid.
+**Platform:** n8n
+**Node types / context:** `n8n-nodes-base.googleSheets`, any operation, `sheetName` resourceLocator.
+**Fix:** Select the tab by `mode: "name"` with the exact tab title. Diagnostic for "is it access or is it the selector": mint an SA token from the key and call `GET /v4/spreadsheets/{id}?fields=sheets.properties(sheetId,title)` to read the real tab titles/gids as the node's identity sees them — if those resolve, the `gid=` selector is the fault.
+**Spec rule:** Specs for Sheets nodes must specify tab selection by name (`mode: "name"`, exact title), not by a `gid=` list value. If a gid must be used, store the bare numeric id, not the `gid=`-prefixed form.
+**First seen:** June 2026, n8n (proposal-drafting workflow — Sheets read/write nodes)
+**Related:** #052
+**Last updated:** June 2026
+
+## History
+
+(none — new entry)
+
+---
+
+## #062 — Code-node action routing: `if / else if` chains make later branches for the same action unreachable
+
+**Symptom:** An action-routing Code node (e.g. a validator switching on `action`) populates some fields but silently leaves others unset for certain actions — e.g. an update path runs with `entity_id = undefined` and matches no row, so the "update" no-ops or hits the wrong record. No error is thrown.
+**Cause:** The branch logic uses `if (A || B) {…} else if (B || C) {…}`. An action value matched by the first branch can never reach a later `else if` that also lists it — the later branch is dead code. The author's intent (often stated in a comment like "fields already populated above") is that both run, which `else if` cannot deliver.
+**Platform:** n8n (Code node), but a generic control-flow hazard
+**Node types / context:** Any Code node that routes per-`action` with chained `if/else if` and assigns different field sets in different branches.
+**Fix:** Trace each action value to exactly one branch. Either assign every field that action needs inside its first matching branch, or convert the dependent branches to standalone `if` blocks after the chain (e.g. a separate `if (update_x || update_y) { entity_id = body.entity_id; validate; }`) so update actions get both field population and id validation.
+**Spec rule:** When a spec presents action-routing branch logic, it must map each action value to exactly one branch and confirm every field that action requires is set there. Reviewers should flag any action value appearing in both an `if` and a later `else if` of the same chain as dead code.
+**First seen:** June 2026, n8n (content-intake workflow — action-aware validation node)
+**Related:** none
+**Last updated:** June 2026
+
+## History
+
+(none — new entry)
+
+---
+
+## #063 — Binary-buffer access in a Code node (`this.helpers.getBinaryDataBuffer`) is version-sensitive — treat as a runtime-verify item
+
+**Symptom:** A Code node that reads an uploaded file via `this.helpers.getBinaryDataBuffer(index, prop)` throws on every execution of the binary path if the accessor is undefined in the running n8n version — even though the code is spec-mandated and validates clean. The n8n-mcp validator may also warn "use `$helpers` not `helpers`".
+**Cause:** The binary-buffer accessor name varies by n8n version (`this.helpers` vs `$helpers`). The accessor is not exercised until a real binary payload runs the node, so a wrong accessor passes build and validation and only fails at runtime on the primary content path.
+**Platform:** n8n (Code node, binary handling)
+**Node types / context:** Any Code node that reads binary data (image/file upload) on a primary path that must "never throw."
+**Fix:** Keep the spec-mandated accessor (`this.helpers.getBinaryDataBuffer(0, 'file0')` is the canonical Code-node form), but mark every binary-reading Code node as a must-runtime-test item — exercise the actual add-with-file path before sign-off. If it throws, switch to `$helpers.getBinaryDataBuffer(...)` and record the swap as a spec correction.
+**Spec rule:** Specs must flag any Code node performing binary-buffer access as runtime-verify-required on the primary path, and name the fallback accessor. Validation passing is not evidence the accessor resolves in the deployed version. See #002 for the related binary-property-name hazard.
+**First seen:** June 2026, n8n (content-intake workflow — add-with-image path)
+**Related:** #002
+**Last updated:** June 2026
+
+## History
+
+(none — new entry)
+
+---
+
 ## Category-level patterns
 
 - **Deactivate/reactivate is a deployment step, not a recovery step** (#001). It belongs in the checklist.
-- **Defaults are wrong for production LLM workflows.** Timeout (#016, #051) and retry-on-fail (#020, #050) both default to values appropriate for trivial workflows and wrong for LLM chains. Both must be explicitly set in the spec — and verified post-create, since the SDK drops retry timing fields silently (#050).
+- **Defaults are wrong for production LLM workflows.** Timeout (#016, #051) and retry-on-fail (#020) both default to values appropriate for trivial workflows and wrong for LLM chains. Set both explicitly in the spec — and note the SDK-side retry-timing drop (#050, cat 11) means "set" is not "persisted" until you re-pull.
 - **updateNode is a full replace, patchNodeField is a partial** (#031). Mixing these up causes silent parameter wipes. Default to patchNodeField.
 - **Model swaps have two parts: the body and the label** (#023). Doing only one creates a silent lie in the topology.
-- **The SDK validator is not the instance validator** (#049). conditions.options.version: 2 is required by the instance but not enforced by the SDK. Always run a save-and-verify step after SDK-based creates, not just a validate step.
 - **Plan tier caps are silent** (#051). A workflow setting that appears correct may be overridden at the instance level with no warning. Verify the instance cap during spec design, not after the first timeout.
-- **Use native nodes first; build HTTP calls only when native fails** (#048). The n8n node for instance-internal reads exists and should be preferred. Document the SSL fallback pattern as a deployment prerequisite.
+- **Credential rebinding is an explicit step on any node-type swap** (#026). Changing the type wipes `credentials`; bind the new one in the same operation. The SDK/MCP binding mechanics live in cat 11 (#066).
+- **Resource-locator and accessor details are version- and value-sensitive** (#055 Sheets tab by name not `gid=`; #063 binary accessor). Both pass build/validation and fail only at runtime — exercise the real path.
+- **Code-node branch logic must route each value once** (#062). `if/else if` chains silently strand later branches for the same value; trace every action to exactly one branch.

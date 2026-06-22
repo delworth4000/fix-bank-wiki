@@ -2,8 +2,8 @@
 
 _Output schema mismatches between LLM and downstream validators, read-only field exclusion from LLM context, pre-build prompt staleness, hardcoded string drift, slug-key documentation, phantom fields (produced by no node)._
 
-**Entry count:** 7
-**Last updated:** May 2026
+**Entry count:** 6
+**Last updated:** June 2026
 **Related categories:** 07-multi-llm-pipelines-and-review-panels, 05-data-sources-and-config-architecture
 
 ---

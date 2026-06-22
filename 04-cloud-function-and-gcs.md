@@ -2,8 +2,8 @@
 
 _Binary payload sizing and signed URL patterns, GCS IAM self-binding, Cloud Function authentication, Python null/absent field handling._
 
-**Entry count:** 5
-**Last updated:** May 2026
+**Entry count:** 6
+**Last updated:** June 2026
 **Related categories:** 03-node-config-and-infrastructure
 
 ---
@@ -90,8 +90,27 @@ _Binary payload sizing and signed URL patterns, GCS IAM self-binding, Cloud Func
 
 ---
 
+## #054 — Google APIs are enabled per-API per-project; one being enabled does not imply another
+
+**Symptom:** n8n Google nodes (or any caller using the project's service account) 403 with "API has not been used in project NNN before or it is disabled," while other Google nodes against the same project and SA work fine. Example: every Google Docs read 403s although Google Sheets reads succeed.
+**Cause:** GCP enables APIs individually per project. Enabling the Sheets API does not enable the Docs API (or Drive, etc.). The service account's IAM grants are irrelevant until the specific API is enabled on the project.
+**Platform:** GCP (project API enablement), surfaced via n8n Google nodes
+**Node types / context:** Any n8n Google node (Docs, Sheets, Drive, …) or Cloud Function call against a GCP project, where a new Google service is introduced to an existing project.
+**Fix:** Enable each required API explicitly: `gcloud services enable docs.googleapis.com --project <project>` (and `sheets.googleapis.com`, `drive.googleapis.com`, … as needed). Propagation is ~1–2 minutes. Enumerate every Google API the build touches and enable them all up front.
+**Spec rule:** Specs must list every GCP API the build depends on as an explicit enablement prerequisite, per project — not assume "the project already uses Google APIs" covers a newly-introduced one. Add the `gcloud services enable` commands to the deployment checklist.
+**First seen:** June 2026, n8n + GCP (proposal-drafting workflow — content-doc reads)
+**Related:** #015
+**Last updated:** June 2026
+
+## History
+
+(none — new entry)
+
+---
+
 ## Category-level patterns
 
 - **Binaries never inline, always signed URLs** (#008, #010). Two entries from different angles converge on the same rule: keep binaries out of the n8n payload path entirely.
 - **GCS signed URLs have a silent IAM dependency** (#014). The self-binding permission is not obvious from the error and must be in the spec as a deployment prerequisite.
 - **JS null ≠ Python absent** (#021). A persistent JS↔Python boundary hazard. `dict.get(key, default)` is wrong; `or default` is right.
+- **GCP grants are necessary but not sufficient — the API must also be enabled** (#054). IAM access to a Google service does nothing until that specific API is enabled on the project. Enable every API the build touches up front; one enabled API never implies another.

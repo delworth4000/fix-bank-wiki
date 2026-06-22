@@ -2,8 +2,8 @@
 
 _Cross-branch references, merge node behaviour, field passthrough in loops, HTTP payload replacement at node boundaries, multi-consumer field misses._
 
-**Entry count:** 9
-**Last updated:** May 2026
+**Entry count:** 10
+**Last updated:** June 2026
 **Related categories:** 02-expressions-and-encoding, 06-llm-prompt-and-schema-contracts
 
 ---
@@ -145,9 +145,46 @@ For pipeline state, replace the `$('NodeName').first()` reference with `data.X` 
 
 ---
 
+## #056 — A Code node fed by two upstream sources reads the wrong items[0]
+
+**Symptom:** A Code node that expects its primary payload at `items[0]` intermittently processes the wrong record — e.g. it treats a config/rubric row as the main payload, and downstream consumers receive `undefined`. The failure tracks execution timing, not input data.
+**Cause:** Two upstream branches are both wired into the node's main input (input 0). n8n concatenates inputs in arrival order, so `items[0]` is whichever source completes first — non-deterministic. The node was only ever meant to read one source from its input and the other via a named reference.
+**Platform:** n8n
+**Node types / context:** Any Code node with a single logical "primary" payload that is nonetheless wired to receive a second dataset on the same input. Especially common where a spec already says one source is "named-ref'd, no downstream merge" but the wiring contradicts it.
+**Fix:** Wire ONLY the primary source into the consumer's main input; read the secondary dataset via a named reference (`$('Source Node').all()` / `.first()`). `removeConnection` the secondary→consumer edge — the secondary node still executes via its own trigger path. Make the spec's "no downstream merge" note an actual wiring constraint, not just prose.
+**Spec rule:** A Code node's main input must carry exactly one logical dataset. Any additional dataset it needs must be declared as a named-reference read, and the spec's wiring diagram must not draw a second edge into that input. Treat "two edges into input 0" as a structural error wherever `items[0]` is read positionally.
+**First seen:** June 2026, n8n (multi-LLM proposal-drafting workflow — reviewer input node)
+**Related:** #011, #018, #043
+**Last updated:** June 2026
+
+## History
+
+(none — new entry)
+
+---
+
+## #067 — n8n Merge node: max 10 inputs, and combine-vs-append mode determines item shape
+
+**Symptom:** Two distinct failures from the same node. (a) A Merge configured for >10 inputs saves without error but `validate_workflow` rejects it ("numberInputs must be one of 2…10") and inputs 11+ are silently orphaned at runtime. (b) A Merge in `combine / combineByPosition` mode feeding a consumer that iterates `items[0..n-1]` produces ONE item with most fields overwritten — silent content loss that passes validation.
+**Cause:** (a) The native Merge node accepts `numberInputs` 2–10 only; the save-time API does not enforce the cap that the validator/runtime does. (b) `combine + combineByPosition` merges items at the same position across inputs into a single item (last-writer-wins on field collisions); `append` (the default, no `mode`) concatenates all inputs' items in input order. Choosing the wrong mode mismatches what the consumer expects.
+**Platform:** n8n
+**Node types / context:** `n8n-nodes-base.merge`, and any aggregator/Code node downstream that reads merged output either as merged fields off one item or as N separate items.
+**Fix:** (a) For >10 convergent inputs, build a multi-stage merge tree (e.g. two 6-input merges → a 2-input merge), preserving append order so positional `items[0..N]` still holds; or replace the merge with a Code-node aggregator that reads sources by named reference (order-independent). (b) Use `append` when the consumer iterates items as N separate records; use `combine/combineByPosition` only when the consumer reads merged fields off a single item. Confirm `numberInputs` is set explicitly — n8n does not infer it from wired connections.
+**Spec rule:** Specs must (a) never call for a single Merge with >10 inputs — specify the merge tree or a named-ref aggregator; and (b) state the Merge mode explicitly alongside what the consumer reads ("N separate items" → append; "one merged item" → combineByPosition). A merge mode left unstated is a spec-time error.
+**First seen:** June 2026, n8n (proposal-drafting workflow — 12 content-doc readers converging)
+**Related:** #006, #013
+**Last updated:** June 2026
+
+## History
+
+(none — new entry)
+
+---
+
 ## Category-level patterns
 
 - **"Wired" does not mean "ran" does not mean "produced data."** Three distinct failure points; verify each independently at the merge/aggregation point (#006, #013).
 - **Named-node refs (`$('X').first()`) are load-bearing.** They silently fix the wrong thing when used inside loops (#043) or across HTTP boundaries (#018). Always audit what they resolve to in context. Both are instances of the same root pattern: `.first()` in the wrong context returns stale or misscoped data.
 - **Multi-consumer fields are a persistent blind spot.** The spec names the primary consumer; secondary consumers accumulate silently and break on shape changes (#033, #011). See also #019 for the related "field has consumers but no producer at all" variant.
 - **Mapping values must be expressions, not constants.** A Sheets defineBelow value left as the bare column name writes header text into every row (#052). Read back the node config and confirm mapping values begin with `=`.
+- **A node's main input must carry one logical dataset; the Merge node has hard limits.** Two edges into input 0 make `items[0]` timing-dependent (#056). The Merge node caps at 10 inputs and its mode (append vs combineByPosition) silently changes item shape (#067). Both are caught only by inspecting actual data at the convergence point, not by "is it wired."

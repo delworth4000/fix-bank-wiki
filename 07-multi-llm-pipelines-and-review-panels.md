@@ -2,8 +2,8 @@
 
 _Rubric and reviewer prompt as a coordinated deployment unit, half-shipped feature flags at the CF boundary, single-reviewer-decides-everything semantics, LLM-derived numeric gates triggering unrepayable loops, structured-output reliability by model._
 
-**Entry count:** 5
-**Last updated:** May 2026
+**Entry count:** 6
+**Last updated:** June 2026
 **Related categories:** 06-llm-prompt-and-schema-contracts, 03-node-config-and-infrastructure
 
 ---
@@ -73,8 +73,8 @@ _Rubric and reviewer prompt as a coordinated deployment unit, half-shipped featu
   - **Add issue-routing logic** in the loop decision step. If the only blocking issue is one the remediator cannot fix, route directly to human review instead of remediation.
 **Spec rule:** Workflow gates must distinguish deterministic inputs (form fields, schema validation results, deterministic calculations) from LLM-derived inputs (estimates, scores, judgments). Deterministic inputs may gate; LLM-derived inputs surface as advisory. Every remediation loop must declare which issue classes it can repair — issues outside that class must route past the remediation, not through it.
 **First seen:** May 2026, n8n + LLM review-and-edit pipeline
-**Related:** #045
-**Last updated:** May 2026
+**Related:** #045, #058
+**Last updated:** June 2026
 
 ## History
 
@@ -92,7 +92,25 @@ _Rubric and reviewer prompt as a coordinated deployment unit, half-shipped featu
 **Spec rule:** When selecting models for a multi-reviewer panel, prioritise reliability of structured output over quality of reasoning. Test JSON-output reliability over 10+ runs on the live prompt and schema before committing to a model for a reviewer slot. A cheap, unreliable reviewer contributes less than no reviewer (it adds cost and noise without adding signal). Reviewer model changes require a reliability test before deploy, not just a qualitative assessment.
 **First seen:** May 2026, n8n + multi-LLM review pipeline (Gemini Flash Lite and GLM-5 both replaced after consistent parse failures)
 **Related:** #017, #045
-**Last updated:** May 2026
+**Last updated:** June 2026
+
+## History
+
+- June 2026: reconfirmed across a 9-test regression. Two refinements. (1) **A well-built panel degrades gracefully** — with quorum ≥2 maintained, parse-failures/anomalies tracked, and `pass` still computed, a *single* reviewer dropout is intermittent, not a pipeline regression; do not treat one dropout as a defect. (2) A frequent concrete cause of one reviewer's parse failures is a **missing `max_tokens`** on that reviewer's HTTP node → truncated JSON; set an explicit `max_tokens` (e.g. ~8000) and lower temperature (~0.1) on the unreliable slot before concluding the model itself must be replaced. Recurring duplicate-`criterion_id` output usually traces to ambiguous rubric wording for that criterion (a rubric/sheet edit, not a workflow edit) — see #030.
+
+---
+
+## #058 — An LLM-derived numeric estimate driving a flag is biased when its input data is sparse; don't blind-widen the threshold
+
+**Symptom:** A flag computed from an LLM's bottom-up numeric estimate over-fires when the source material is thin. Example: a fee-variance flag compares a target figure to an LLM-estimated cost; when the brief omits the detail the estimate needs (e.g. per-item day counts), the estimator lowballs (~40% of target) and the flag reads "significant" on genuinely-aligned cases. The same flag is correct when the input states the missing detail, and correctly fires on true outliers.
+**Cause:** The estimate's error is correlated with input completeness, not with the thing being flagged. Treating the estimate as if it were uniformly reliable makes the flag a proxy for "was the input detailed" rather than "is the value off." Widening or suppressing the threshold to quiet the false positives also masks the true positives the flag exists to catch.
+**Platform:** any LLM-in-the-loop pipeline with a numeric flag/gate derived from an LLM estimate
+**Node types / context:** Code-node or IF-node flags branching on an LLM-produced number (cost/effort/confidence estimate). Especially advisory flags whose noise is reference-only but erodes trust.
+**Fix:** Fix the estimator, not the threshold. Strengthen the estimation prompt to scale sensibly from available context (e.g. guest count / scope) when specific inputs are absent, and to signal low confidence rather than guess low. Only then recalibrate thresholds, and verify against known true-positive cases so the recalibration doesn't blind the flag. If the flag is internal/advisory, rank its noise accordingly (low priority) but still treat the root cause as estimator bias.
+**Spec rule:** When a flag or gate is driven by an LLM-derived number, the spec must state how the estimator behaves when its inputs are incomplete (scale-from-context + low-confidence signal), and require threshold changes to be validated against true-positive cases. "Widen the threshold until it stops firing" is a spec-time anti-pattern — it masks real signal. Complements #046: LLM-derived numbers are advisory; here, even the advisory value must be made robust to sparse input.
+**First seen:** June 2026, n8n (proposal-drafting workflow — investment-summary fee-variance flag)
+**Related:** #046
+**Last updated:** June 2026
 
 ## History
 
@@ -103,6 +121,7 @@ _Rubric and reviewer prompt as a coordinated deployment unit, half-shipped featu
 ## Category-level patterns
 
 - **Panel semantics must be declared, not assumed** (#045). "Three reviewers" means nothing without specifying whether it's consensus-based or primary-with-validation. The cost structure implies one; the code may implement the other.
-- **LLM-derived numbers are advisory, not deterministic** (#046). Hard-gating on LLM estimates invites unrepairable loops. Reclassify as surfaced values and add explicit issue-class routing.
+- **LLM-derived numbers are advisory, not deterministic** (#046). Hard-gating on LLM estimates invites unrepairable loops. Reclassify as surfaced values and add explicit issue-class routing. And even as an advisory value, an LLM estimate is biased by input completeness (#058) — fix the estimator before touching the threshold; widening it to silence false positives masks the true positives.
+- **A panel that degrades gracefully is working, not broken** (#047 history). Quorum-with-tracking means a single reviewer dropout is intermittent noise, not a regression — but a persistently failing slot is usually a missing `max_tokens` (truncation) or an under-reliable model, both fixable before blaming "flakiness."
 - **Reliability testing is a deployment prerequisite for reviewer model selection** (#047). Cost-optimised models fail at structured-output at meaningful rates. Test on the actual prompt, not in general.
 - **Both sides of a feature flag must ship together** (#044). Receiver without producer = silent no-op. Rubric without matching reviewer prompts = silent noise (#030). These are the same pattern at different scales.

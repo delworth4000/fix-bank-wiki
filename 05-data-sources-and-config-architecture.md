@@ -2,8 +2,8 @@
 
 _Google Docs markup stripping, verifying node output from actual execution data, single source of truth for config, field naming normalisation at source boundaries._
 
-**Entry count:** 4
-**Last updated:** May 2026
+**Entry count:** 5
+**Last updated:** June 2026
 **Related categories:** 06-llm-prompt-and-schema-contracts, 01-data-flow-and-wiring
 
 ---
@@ -74,8 +74,27 @@ _Google Docs markup stripping, verifying node output from actual execution data,
 
 ---
 
+## #053 — Controlled-vocabulary validators must match case-insensitively, and seed data must be reconciled to the canonical vocabulary as a data task
+
+**Symptom:** A validator that checks free-text values (service names, categories, headings, roles) against a canonical list rejects valid records — e.g. 100% of submissions fail with "wrong heading," or an `update` on an existing record 400s using that record's *own* stored values (`Invalid services_delivered: AV / Production, …`). The canonical list is lowercase; the inbound/stored data is Title Case or uses legacy spellings.
+**Cause:** Two compounding issues. (1) The comparison is case-sensitive (`list.includes(value)`) while the canonical list is lowercase and the data is not — and a shared `normalise` step does not canonicalise case. (2) Seed/reference data carries non-canonical vocabulary in several classes: case-only differences; separator/spacing differences (`Talent/Entertainment` vs `talent / entertainment`); and genuine mismatches (legacy short names like `Venue`, retired terms) — often far more widespread than assumed (e.g. the majority of rows, not "a couple").
+**Platform:** any (n8n Code-node validators; applies to any controlled-vocabulary check)
+**Node types / context:** Intake/validation Code nodes comparing inbound or stored values against a canonical allowlist for add/update actions. Also covers required-field validators backed by a downstream consumer.
+**Fix:** (1) Compare case-insensitively — lowercase both sides (`VALID.includes(String(s).toLowerCase())`). Audit every validator: where multiple nodes check the same vocabulary, one is usually the outlier still comparing case-sensitively. (2) Treat residual divergence (separators, legacy/genuine mismatches) as a **one-time seed-data normalisation**, not a validator alias map — baking a legacy→canonical map into the validator violates the single-source rule (#035, #029). Measure the spread before migrating and surface unmappable tokens for an owner decision. (3) For a required field backed by a downstream consumer (e.g. a field that drives generation), reconcile empty seed data by **backfilling**, not by relaxing the validator.
+**Spec rule:** Any controlled-vocabulary check against a canonical list is case-insensitive by spec. Seed/reference data must be reconciled to the canonical vocabulary as a data task before the validator ships — do not encode legacy aliases in the validator. When a required field is backed by a downstream consumer, the spec resolves empty seed data by backfilling, not by weakening the requirement. The web/client layer should already submit canonical (lowercase) values; the validator failures usually come from re-posting stored legacy data, so fix the store.
+**First seen:** June 2026, n8n (proposal-drafting + content-intake workflows — services/category validation)
+**Related:** #005, #029, #035
+**Last updated:** June 2026
+
+## History
+
+(none — new entry; consolidates the proposal-side and content-side instances and the seed-data-vs-validator disposition)
+
+---
+
 ## Category-level patterns
 
 - **Test against real execution output, not assumed shape** (#028). One MCP call to pull execution data saves multiple wrong-parser iterations. This applies to any source boundary, not just Google Docs. See also #038 for the related pattern: even when you pull real execution data, what you inspect via the read transport may not be what the system actually stores — parse before inspecting.
 - **Google Docs are for humans; Google Sheets are for machines** (#027, #029). Two entries from different angles reach the same conclusion: don't use Docs as config. If you must, verify what the n8n node actually returns before writing any parser against it.
 - **Normalise at the source boundary, document the mapping** (#005). Field name conventions diverge silently. The spec must own the mapping, not leave it to the runtime.
+- **Validators are case-insensitive; the data is the thing you fix** (#053). When a controlled-vocabulary check fails on valid records, lowercase both sides — then reconcile divergent seed data as a one-time data task rather than teaching the validator every legacy spelling. Aliases in the validator recreate the dual-source problem (#029, #035).

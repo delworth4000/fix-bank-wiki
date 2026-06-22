@@ -18,7 +18,9 @@ Fix Bank/
     ├── 06-llm-prompt-and-schema-contracts.md
     ├── 07-multi-llm-pipelines-and-review-panels.md
     ├── 08-debugging-process-and-session-discipline.md
-    └── 09-document-generation.md
+    ├── 09-document-generation.md
+    ├── 10-edge-workers-web-app.md
+    └── 11-n8n-sdk-mcp-tooling.md
 ```
 
 New categories are created when enough entries justify one — not speculatively.
