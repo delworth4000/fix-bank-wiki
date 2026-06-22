@@ -124,10 +124,15 @@ Run when: every ~10 new entries, or when the user requests it.
 
 ## Maintenance rules
 
-- **Entries must be generic.** No client names, no client-specific node names, no specific credential names or IDs.
+- **No private information anywhere in the wiki.** This is a hard rule and applies to *every* file — category entries, `log.md`, `index.md`, and provenance lines (e.g. `First seen:`), not just entry bodies. Scrub before writing:
+  - Client / company / project / product names → replace with a generic descriptor (e.g. "a Google Sheets tracker workflow").
+  - Workflow names and n8n workflow IDs, execution IDs tied to a client, Drive/folder/file IDs, GCS bucket names, service-account emails, project IDs.
+  - Credential names/IDs, API keys, tokens, secrets, and any real URLs/endpoints.
+  Keep only the generic technical pattern. If you cannot describe the fix without an identifier, the entry is not generic enough — rewrite it. This rule exists because the wiki is published to a public read mirror; treat everything here as world-readable.
+- **`log.md` session headers must be generic too.** Title sessions by the technical work, not the client (e.g. "Google Sheets tracker workflow", not a product name + workflow ID).
 - **History is appended, not rewritten.** Old versions move into History with date and reason. Cap at last 3 amendments.
 - **Cross-reference related entries.** Use entry IDs. Cross-category references are fine.
-- **`log.md` is append-only.** Never edit past entries.
+- **`log.md` is append-only.** Never edit past entries (the one exception: redacting private information that should never have been written).
 
 ---
 
