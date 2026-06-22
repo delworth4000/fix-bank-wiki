@@ -33,7 +33,7 @@ Append-only. Never edit past entries. Format: `## [YYYY-MM-DD] operation | descr
 
 ---
 
-## Session — 27 May 2026 — TAAFT Prompt of the Day Tracker (Vps4llY2NUg2hnSZ)
+## Session — 27 May 2026 — Google Sheets tracker workflow
 - Debug session. Diagnosed junk-row output: Google Sheets node defineBelow mapping had literal column-name strings instead of expressions, writing header text into every row. Fixed mappings to expressions; switched append → appendOrUpdate matching on Notion Link for dedup; corrected a pre-existing IF-node lint error (notEmpty missing singleValue). All three live-verified via executions 928 + 929 (ran twice; 6 prompts → 6 rows, no duplication).
 - New Fix Bank entry: #052 (category 01) — Google Sheets defineBelow literal-string mappings.
 - Total entries 51 → 52.

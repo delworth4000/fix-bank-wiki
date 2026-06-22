@@ -135,7 +135,7 @@ For pipeline state, replace the `$('NodeName').first()` reference with `data.X` 
 **Node types / context:** n8n-nodes-base.googleSheets v4.x, operation append or appendOrUpdate, mappingMode defineBelow. Most likely after hand-editing a node or importing a template where the value side was left as the column name.
 **Fix:** Set each `columns.value` entry to an expression: `={{ $json.Title }}`, and for keys containing spaces use bracket notation: `={{ $json["Notion Link"] }}`. Verify by reading back the node config and confirming each mapping value begins with `=`. A bare string value (no leading `=`) that happens to equal the column name is the tell.
 **Spec rule:** Every `defineBelow` mapping value in a Sheets-writing node must be an expression. A bare string equal to the column name is a spec-time error. Specs for Sheets append/upsert nodes must show the mapping in expression form (`={{ $json.X }}`), never as the column name alone. Add a read-back verification step ("confirm values start with `=`") to the post-build check for any node using defineBelow.
-**First seen:** May 2026, n8n (TAAFT Prompt of the Day Tracker, Vps4llY2NUg2hnSZ — junk header-text rows)
+**First seen:** May 2026, n8n (a Google Sheets tracker workflow — junk header-text rows)
 **Related:** #038 (literal-vs-expression confusion in a different context — MCP read transport)
 **Last updated:** May 2026
 
