@@ -82,3 +82,10 @@ Triaged ~28 proposed entries from four `proposed-fix-bank.md` files (Testing / C
 - Phase 6: updated index.md (counts, Categories table incl. new row 11, entry→category map, dual-filing note) and schema.md folder structure. No retired IDs (no merges). Lint counter reset.
 - Next lint pass due: after entry #083.
 - Public mirror NOT refreshed — user must run publish-wiki.sh.
+
+## [2026-06-22] debug | Template row-cap fix ported across a parallel stack — amend #022
+
+- Amended **#022** (no new number): reversed its original "add an upstream validator cap" guidance to **"prefer dynamic rendering; add a cap only as a scoped last resort, and the renderer must fail loudly — never silently truncate."** Prior Fix/Spec-rule preserved in the entry's `## History`.
+- Trigger: a live render failure where a validator-side row cap (a) counted a proxy unit that could legitimately exceed it, (b) fired on inputs that rendered to a *different, uncapped* artifact, and (c) was the only thing preventing silent truncation in the renderer itself. Resolution: make the renderer dynamic (clone prototype row to fit, assert no truncation) and remove the upstream cap.
+- No new entries; total unchanged (73). Lint counter untouched (consolidation pass already run earlier today).
+- Public mirror NOT refreshed — user must run publish-wiki.sh.
